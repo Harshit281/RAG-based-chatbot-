@@ -1,6 +1,6 @@
 # RAG Policy Chatbot
 
-A complete **Retrieval-Augmented Generation (RAG)** chatbot built in Python that answers company policy questions. It loads a CSV knowledge base of policy documents, chunks and embeds them into a vector store, retrieves the most relevant passages for any user question, and generates a grounded natural-language answer using a Groq-hosted LLM — all from an interactive terminal interface.
+A complete **Retrieval-Augmented Generation (RAG)** chatbot built in Python that answers privacy policy questions using the **OPP-115** dataset. It loads a SQLite knowledge base of privacy policy segments, chunks and embeds them into a vector store, retrieves the most relevant passages for any user question, and generates a grounded natural-language answer using a Groq-hosted LLM — all from an interactive terminal interface.
 
 ---
 
@@ -24,12 +24,12 @@ A complete **Retrieval-Augmented Generation (RAG)** chatbot built in Python that
 
 ## Overview
 
-This project demonstrates a **standard, end-to-end RAG implementation** using company policy documents as the knowledge base. It covers every core stage of the RAG pipeline:
+This project demonstrates a **standard, end-to-end RAG implementation** using the OPP-115 privacy policy dataset as the knowledge base. It covers every core stage of the RAG pipeline:
 
 | # | RAG Step | Module | Description |
 |---|---|---|---|
-| 1 | **Data Loading** | `Scripts/load_data.py` | Reads the policy CSV and validates the required schema (`ID`, `Topic`, `Content`). |
-| 2 | **Chunking** | `Scripts/chunk_data.py` | Converts each CSV row into a retrieval-ready chunk with normalised text, topic metadata, and extracted reference codes. |
+| 1 | **Data Loading** | `Scripts/load_data.py` | Reads the policy SQLite database and validates the required schema (`ID`, `Topic`, `Content`). |
+| 2 | **Chunking** | `Scripts/chunk_data.py` | Converts each database row into a retrieval-ready chunk with normalised text, topic metadata, and extracted reference codes. |
 | 3 | **Embedding** | `Scripts/embed_data.py` | Encodes chunk text into dense vector representations using a `sentence-transformers` model (`all-MiniLM-L6-v2` by default). |
 | 4 | **Vector Storage** | `Scripts/vector_store.py` | Stores embeddings in a FAISS `IndexFlatL2` index for fast similarity search (falls back to scikit-learn `NearestNeighbors` if FAISS is unavailable). |
 | 5 | **Retrieval** | `Scripts/retriever.py` | Embeds the user query (with optional multi-query expansion), searches the vector store, deduplicates and ranks results by average distance. |
@@ -45,14 +45,14 @@ Below is a detailed breakdown of how each RAG stage is implemented.
 
 ### Step 1 — Data Loading (`Scripts/load_data.py`)
 
-- Reads `Data/policy_data.csv` using Pandas.
-- Validates that the CSV contains the required columns: `ID`, `Topic`, `Content`.
-- Casts `Topic` and `Content` to strings and returns a clean DataFrame.
-- Raises `FileNotFoundError` if the CSV is missing, or `ValueError` if columns are absent.
+- Reads `Data/policy_data.db` (SQLite) using the `sqlite3` standard library.
+- Validates that the `policy_data` table exists and contains the required columns: `ID`, `Topic`, `Content`.
+- Returns a lightweight `PolicyData` object (supports `len()` and `iterrows()`) so the downstream pipeline works unchanged.
+- Raises `FileNotFoundError` if the database is missing, or `ValueError` if the table is absent or empty.
 
 ### Step 2 — Chunking (`Scripts/chunk_data.py`)
 
-- Iterates over each row in the DataFrame.
+- Iterates over each row from the `PolicyData` object.
 - For each row, creates a **chunk dictionary** with the following keys:
 
   | Key | Source | Purpose |
@@ -119,7 +119,7 @@ rag-policy-chatbot/
 │
 ├── Data/                        # Knowledge base and cached artifacts
 │   ├── README.md                # Documentation for the Data directory
-│   ├── policy_data.csv          # Source policy documents (206 entries)
+│   ├── policy_data.db           # OPP-115 privacy policy database (2,185 entries)
 │   └── cache/                   # Auto-generated on first run (git-ignored)
 │       ├── embeddings.npy       #   Cached sentence-transformer embeddings
 │       └── faiss.index          #   Cached FAISS vector index
@@ -127,7 +127,8 @@ rag-policy-chatbot/
 ├── Scripts/                     # Core RAG pipeline modules (Python only)
 │   ├── README.md                # Documentation for the Scripts directory
 │   ├── __init__.py              # Package initialiser
-│   ├── load_data.py             # Step 1: Data loading & CSV validation
+│   ├── prepare_opp115.py        # Data preparation: fetches OPP-115 from Hugging Face → policy_data.db
+│   ├── load_data.py             # Step 1: Data loading & SQLite validation
 │   ├── chunk_data.py            # Step 2: Row-to-chunk conversion
 │   ├── embed_data.py            # Step 3: Embedding model & text encoding
 │   ├── vector_store.py          # Step 4: FAISS / scikit-learn vector index
@@ -153,7 +154,7 @@ Contains the source policy documents and auto-generated cache files. See [`Data/
 
 | File | Description |
 |---|---|
-| `policy_data.csv` | The primary knowledge base — 206 rows with `ID`, `Topic`, and `Content` columns. Topics include remote work, health insurance, IT security, expense reimbursement, and more. |
+| `policy_data.db` | The primary knowledge base — 2,185 OPP-115 privacy policy segments stored in a SQLite database with `ID`, `Topic`, and `Content` columns. Topics span 12 privacy categories including First Party Collection, User Choice/Control, Data Security, and more. |
 | `cache/` | Auto-created directory storing `embeddings.npy` and `faiss.index` after the first run. Listed in `.gitignore`. Delete to force a full rebuild. |
 
 ### `Scripts/` — RAG Pipeline Modules
@@ -162,7 +163,7 @@ Contains one Python module per RAG pipeline stage. See [`Scripts/README.md`](Scr
 
 | Module | RAG Step | Key Functions |
 |---|---|---|
-| `load_data.py` | Data Loading | `load_csv(filepath) → DataFrame` |
+| `load_data.py` | Data Loading | `load_db(filepath) → PolicyData` |
 | `chunk_data.py` | Chunking | `create_chunks(df) → List[Dict]` |
 | `embed_data.py` | Embedding | `load_embedding_model(name)`, `generate_embeddings(model, texts)` |
 | `vector_store.py` | Vector Storage | `VectorStore(embeddings)`, `.search()`, `save_index()`, `load_index()` |
@@ -224,7 +225,7 @@ This installs:
 
 | Package | Purpose |
 |---|---|
-| `pandas` | CSV loading and DataFrame operations |
+| `datasets` | Fetching the OPP-115 dataset from Hugging Face (used by `prepare_opp115.py`) |
 | `sentence-transformers` | Local embedding model for semantic search |
 | `faiss-cpu` | Fast approximate nearest-neighbour vector index |
 | `scikit-learn` | Fallback nearest-neighbour search (if FAISS is unavailable) |
@@ -260,12 +261,12 @@ python main.py
 
 **First-run sequence:**
 
-1. Loads and validates `Data/policy_data.csv` (206 policy entries).
-2. Creates chunks from each CSV row.
+1. Loads and validates `Data/policy_data.db` (2,185 OPP-115 privacy policy segments).
+2. Creates chunks from each database row.
 3. Generates embeddings using `sentence-transformers` (saved to `Data/cache/embeddings.npy`).
 4. Builds a FAISS vector index (saved to `Data/cache/faiss.index`).
 5. Loads the embedding model for query-time encoding.
-6. Enters the interactive REPL — type a policy question and press Enter.
+6. Enters the interactive REPL — type a privacy policy question and press Enter.
 
 **Subsequent runs** load cached embeddings and the index from disk, making startup near-instant.
 
@@ -305,7 +306,7 @@ All settings are controlled via environment variables in the `.env` file. Only `
   │   Data/       │                      │   Scripts/      │                      │   Utils/        │
   │               │                      │                 │                      │                 │
   │ policy_data   │◄────── loaded by ────│ load_data.py    │                      │ text_cleaning   │
-  │   .csv        │                      │                 │                      │   .py           │
+  │   .db         │                      │                 │                      │   .py           │
   │               │                      │ chunk_data.py ──┼── uses ─────────────►│                 │
   │ cache/        │◄── saved/loaded ─────│ embed_data.py   │                      │ formatting.py   │
   │  embeddings   │                      │ vector_store.py │                      │   (terminal UI) │
@@ -322,10 +323,10 @@ All settings are controlled via environment variables in the `.env` file. Only `
        ▼
   ┌─────────────────────────────────┐
   │  1. Multi-query expansion       │  retriever.py
-  │     "leave policy"              │  → "leave policy"
-  │                                 │  → "leave policy policy"
-  │                                 │  → "company policy for leave policy"
-  │                                 │  → "guidelines for leave policy"
+  │     "data retention"             │  → "data retention"
+  │                                 │  → "data retention policy"
+  │                                 │  → "company policy for data retention"
+  │                                 │  → "guidelines for data retention"
   └──────────────┬──────────────────┘
                  │
                  ▼
@@ -370,7 +371,7 @@ All settings are controlled via environment variables in the `.env` file. Only `
 
 | Decision | Rationale |
 |---|---|
-| **CSV as knowledge base** | Simple, human-editable format suitable for small-to-medium policy document sets. Easy to version in Git. |
+| **SQLite as knowledge base** | Schema enforcement, transactional writes, and built-in queryability — no CSV-escaping issues. The `prepare_opp115.py` script populates it from the real-world OPP-115 dataset on Hugging Face, ensuring reproducible builds. `sqlite3` is a Python stdlib module, so no extra dependency is needed at runtime. |
 | **`sentence-transformers` for local embeddings** | Runs offline after initial model download. No API cost for embedding. `all-MiniLM-L6-v2` provides a good balance of quality and speed. |
 | **FAISS with scikit-learn fallback** | FAISS offers high-performance search but may not install cleanly on all platforms. The automatic fallback ensures the chatbot works everywhere. |
 | **Multi-query expansion** | Policy questions can be phrased in many ways. Expanding to multiple variants improves recall without requiring the user to guess the "right" wording. |
@@ -384,7 +385,32 @@ All settings are controlled via environment variables in the `.env` file. Only `
 
 ## Extending the Knowledge Base
 
-1. **Add rows** to `Data/policy_data.csv` following the existing `ID,Topic,Content` format.
+### Refreshing from OPP-115
+
+Re-run the data preparation script to fetch the latest dataset and rebuild the database:
+
+```bash
+pip install datasets          # one-time install
+python Scripts/prepare_opp115.py
+```
+
+Then delete the cache and restart:
+
+```bash
+# Mac/Linux
+rm -rf Data/cache
+
+# Windows
+rmdir /s /q Data\cache
+```
+
+```bash
+python main.py
+```
+
+### Adding custom entries
+
+1. **Add rows** directly to the `policy_data` table in `Data/policy_data.db` using any SQLite client.
 2. **Delete the cache**: remove `Data/cache/` (or just the files inside it) so embeddings and the index are rebuilt.
 3. **Re-run**: `python main.py` — the chatbot will automatically reprocess and re-index all entries.
 
@@ -398,8 +424,9 @@ All settings are controlled via environment variables in the `.env` file. Only `
 | `faiss-cpu` fails to install | The chatbot will automatically fall back to scikit-learn. You can safely remove `faiss-cpu` from `requirements.txt` if needed. |
 | Unicode / box-drawing characters display as `?` | Your terminal may not support UTF-8. The chatbot auto-detects this and falls back to ASCII characters. Set `chcp 65001` on Windows CMD for UTF-8 support. |
 | `ModuleNotFoundError: No module named 'Scripts'` | Make sure you are running `python main.py` from the project root directory (`rag-policy-chatbot/`). |
-| Slow first launch | On the first run, embeddings are generated for all 206 policy entries (~10–30 seconds depending on hardware). Subsequent runs load from cache and start in under 2 seconds. |
-| Stale answers after updating the CSV | Delete `Data/cache/` and restart to force re-embedding and re-indexing. |
+| `policy_data.db` is missing or empty | Run `python Scripts/prepare_opp115.py` to fetch the OPP-115 dataset and create the database. |
+| Slow first launch | On the first run, embeddings are generated for all 2,185 policy segments (~30–90 seconds depending on hardware). Subsequent runs load from cache and start in under 2 seconds. |
+| Stale answers after updating the database | Delete `Data/cache/` and restart to force re-embedding and re-indexing. |
 
 ---
 

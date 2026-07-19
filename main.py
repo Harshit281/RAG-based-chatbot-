@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from Scripts.chunk_data import create_chunks
 from Scripts.embed_data import generate_embeddings, load_embedding_model
 from Scripts.generator import generate_answer, setup_groq_api
-from Scripts.load_data import load_csv
+from Scripts.load_data import load_db
 from Scripts.retriever import retrieve
 from Scripts.vector_store import VectorStore, load_index, save_index
 from Utils.formatting import (
@@ -85,12 +85,12 @@ def main():
         return
 
     api_config = setup_groq_api(api_key)
-    csv_path = DATA_DIR / 'policy_data.csv'
+    db_path = DATA_DIR / 'policy_data.db'
 
     print_banner()
 
     print_status('Loading policy data...', 'load')
-    df = load_csv(str(csv_path))
+    df = load_db(str(db_path))
     print_status(f'Loaded {len(df)} policy entries.', 'success')
 
     chunks = create_chunks(df)

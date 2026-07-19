@@ -8,7 +8,7 @@ This directory contains utility modules used across the RAG pipeline for **text 
 
 ### `text_cleaning.py` — Text Normalisation & Extraction
 
-Pure-function helpers for cleaning raw CSV text before embedding and display. Used primarily by `Scripts/chunk_data.py`.
+Pure-function helpers for cleaning raw policy text before embedding and display. Used primarily by `Scripts/chunk_data.py`.
 
 **Functions:**
 
