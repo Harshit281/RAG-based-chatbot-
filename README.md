@@ -1,24 +1,29 @@
-# RAG Policy Chatbot
+# Privacy Policy Q&A Assistant (RAG Chatbot)
 
-A complete **Retrieval-Augmented Generation (RAG)** chatbot built in Python that answers privacy policy questions using the **OPP-115** dataset. It loads a SQLite knowledge base of privacy policy segments, chunks and embeds them into a vector store, retrieves the most relevant passages for any user question, and generates a grounded natural-language answer using a Groq-hosted LLM — all from an interactive terminal interface.
+A complete **Retrieval-Augmented Generation (RAG)** chatbot built in Python that answers questions about how companies collect, use, share, retain, and secure personal data. It uses the **OPP-115** (Online Privacy Policies) dataset — a well-known NLP research dataset built from real, published privacy policies of actual companies — as its knowledge base, stored in a SQLite database.
+
+The chatbot loads 2,185 annotated privacy policy segments, chunks and embeds them into a vector store, retrieves the most relevant passages for any user question, and generates a grounded natural-language answer using a Groq-hosted LLM — all from an interactive terminal interface.
+
+> **Why OPP-115?** This project was originally built with synthetic/hand-written HR policy data. Per our internship coordinator's guidance to use a standard, real-world dataset for production-readiness, we migrated to OPP-115 — a research-grade dataset of real company privacy policies annotated into 10+ standard categories (data collection, third-party sharing, user choice, data retention, security, etc.).
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [RAG Pipeline Steps](#rag-pipeline-steps)
-3. [Repository Structure](#repository-structure)
-4. [Directory Details](#directory-details)
-5. [Prerequisites](#prerequisites)
-6. [Installation & Setup](#installation--setup)
-7. [Running the Chatbot](#running-the-chatbot)
-8. [Configuration Reference](#configuration-reference)
-9. [Architecture & Data Flow](#architecture--data-flow)
-10. [Key Design Decisions](#key-design-decisions)
-11. [Extending the Knowledge Base](#extending-the-knowledge-base)
-12. [Troubleshooting](#troubleshooting)
-13. [License](#license)
+2. [Sample Questions](#sample-questions)
+3. [RAG Pipeline Steps](#rag-pipeline-steps)
+4. [Repository Structure](#repository-structure)
+5. [Directory Details](#directory-details)
+6. [Prerequisites](#prerequisites)
+7. [Installation & Setup](#installation--setup)
+8. [Running the Chatbot](#running-the-chatbot)
+9. [Configuration Reference](#configuration-reference)
+10. [Architecture & Data Flow](#architecture--data-flow)
+11. [Key Design Decisions](#key-design-decisions)
+12. [Extending the Knowledge Base](#extending-the-knowledge-base)
+13. [Troubleshooting](#troubleshooting)
+14. [License](#license)
 
 ---
 
@@ -36,6 +41,23 @@ This project demonstrates a **standard, end-to-end RAG implementation** using th
 | 6 | **Generation** | `Scripts/generator.py` | Constructs a grounded prompt from retrieved context, sends it to the Groq LLM via the OpenAI-compatible chat completions API, and parses the response. |
 
 The interactive REPL loop in `main.py` orchestrates these steps and presents results through a rich, ANSI-coloured terminal UI.
+
+---
+
+## Sample Questions
+
+Here are some example questions you can ask the chatbot, grouped by OPP-115 privacy topic:
+
+| Privacy Topic | Example Questions |
+|---|---|
+| **Data Retention** | "How long does the company retain my personal information?" · "Does the company store my data indefinitely?" |
+| **Data Security** | "What security measures are used to protect user data?" · "How is my personal information encrypted?" |
+| **Third Party Sharing** | "Does the company share my data with third-party advertisers?" · "What information is shared with third-party providers?" |
+| **User Choice & Control** | "Can I opt out of targeted advertising?" · "How do cookies and tracking technologies affect my privacy?" |
+| **User Access & Deletion** | "How can I request to delete my personal data?" · "What happens to my data if I cancel my account?" |
+| **Do Not Track** | "How does the company handle Do Not Track browser signals?" |
+| **Policy Changes** | "How will I be notified if the privacy policy changes?" |
+| **International Audiences** | "Is my data transferred or stored internationally?" · "What privacy protections exist for children under 13?" |
 
 ---
 
@@ -58,9 +80,9 @@ Below is a detailed breakdown of how each RAG stage is implemented.
   | Key | Source | Purpose |
   |---|---|---|
   | `id` | `row['ID']` (as string) | Unique identifier |
-  | `topic` | `row['Topic']` | Human-readable policy title |
-  | `content` | `row['Content']` | Original policy text |
-  | `ref_code` | Extracted via regex from `Content` | Citation code (e.g. `RW-001`) |
+  | `topic` | `row['Topic']` | Privacy policy category |
+  | `content` | `row['Content']` | Original privacy policy text |
+  | `ref_code` | Extracted via regex from `Content` | Citation code (if present) |
   | `text` | Normalised `Topic + Content` | Clean text used for embedding |
 
 - Uses `Utils/text_cleaning.py` for whitespace normalisation and ref-code extraction.
@@ -100,7 +122,7 @@ Below is a detailed breakdown of how each RAG stage is implemented.
   > *"You are a policy assistant. Answer the user's question using only the context provided. If the answer is not contained in the context, say you are not able to answer from the available policy information."*
 - Sends the prompt to the Groq API via the OpenAI-compatible `/chat/completions` endpoint.
 - Parses the response using a robust extractor that handles multiple response envelope formats.
-- The final answer is displayed in the terminal with source ref-code citations.
+- The final answer is displayed in the terminal with source citations.
 
 ---
 
@@ -114,6 +136,7 @@ rag-policy-chatbot/
 ├── main.py                      # Application entry point — orchestrates the full RAG pipeline
 ├── requirements.txt             # Python package dependencies
 ├── .env                         # API keys and runtime configuration (git-ignored)
+├── .env.example                 # Template for .env with default values
 ├── .gitignore                   # Excludes .env, cache/, __pycache__/, *.pyc
 ├── README.md                    # This file — repository-level documentation
 │
@@ -150,19 +173,20 @@ rag-policy-chatbot/
 
 ### `Data/` — Knowledge Base
 
-Contains the source policy documents and auto-generated cache files. See [`Data/README.md`](Data/README.md) for full details.
+Contains the OPP-115 privacy policy database and auto-generated cache files. See [`Data/README.md`](Data/README.md) for full details.
 
 | File | Description |
 |---|---|
-| `policy_data.db` | The primary knowledge base — 2,185 OPP-115 privacy policy segments stored in a SQLite database with `ID`, `Topic`, and `Content` columns. Topics span 12 privacy categories including First Party Collection, User Choice/Control, Data Security, and more. |
+| `policy_data.db` | The primary knowledge base — **2,185 OPP-115 privacy policy segments** stored in a SQLite database with `ID`, `Topic`, and `Content` columns. Topics span 12 privacy categories (First Party Collection, User Choice/Control, Data Security, Data Retention, Third Party Sharing, Do Not Track, and more). Sourced from [`alzoubi36/opp_115`](https://huggingface.co/datasets/alzoubi36/opp_115) on Hugging Face. |
 | `cache/` | Auto-created directory storing `embeddings.npy` and `faiss.index` after the first run. Listed in `.gitignore`. Delete to force a full rebuild. |
 
 ### `Scripts/` — RAG Pipeline Modules
 
-Contains one Python module per RAG pipeline stage. See [`Scripts/README.md`](Scripts/README.md) for function signatures and detailed API docs.
+Contains one Python module per RAG pipeline stage plus the data preparation script. See [`Scripts/README.md`](Scripts/README.md) for function signatures and detailed API docs.
 
 | Module | RAG Step | Key Functions |
 |---|---|---|
+| `prepare_opp115.py` | Data Preparation | Fetches OPP-115 from Hugging Face → `policy_data.db` |
 | `load_data.py` | Data Loading | `load_db(filepath) → PolicyData` |
 | `chunk_data.py` | Chunking | `create_chunks(df) → List[Dict]` |
 | `embed_data.py` | Embedding | `load_embedding_model(name)`, `generate_embeddings(model, texts)` |
@@ -196,8 +220,8 @@ Contains formatting and text-cleaning helpers used across the pipeline. See [`Ut
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd rag-policy-chatbot
+git clone https://github.com/Harshit281/RAG-based-chatbot-.git
+cd RAG-based-chatbot-
 ```
 
 ### 2. Create a Virtual Environment (recommended)
@@ -234,7 +258,13 @@ This installs:
 
 ### 4. Configure the `.env` File
 
-Edit the `.env` file in the project root and set your Groq API key:
+Copy the template and fill in your Groq API key:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
 
 ```dotenv
 # Required
@@ -249,6 +279,15 @@ EMBEDDING_MODEL=all-MiniLM-L6-v2
 MULTI_QUERY_ENABLED=true
 TOP_K=5
 GENERATION_TOP_K=3
+```
+
+### 5. Prepare the Database (if not already present)
+
+The repository ships with a pre-built `Data/policy_data.db`. To rebuild it from scratch:
+
+```bash
+pip install datasets          # one-time install
+python Scripts/prepare_opp115.py
 ```
 
 ---
@@ -269,6 +308,23 @@ python main.py
 6. Enters the interactive REPL — type a privacy policy question and press Enter.
 
 **Subsequent runs** load cached embeddings and the index from disk, making startup near-instant.
+
+**Example session:**
+
+```
+? Ask a policy question: How long does the company retain my data?
+
+──────────────── 📖 RETRIEVED SNIPPETS ────────────────
+  1. Data Retention
+     Data retention policy We will retain your information for
+     as long as your account is active or as needed to provide
+     you with services...
+
+══════════════════ 🤖 ANSWER ══════════════════════════
+  The company keeps your data for as long as your account
+  remains active or as long as it's needed to provide you
+  with its services...
+```
 
 **To exit:** Type `quit` or `exit` at the prompt.
 
@@ -323,7 +379,7 @@ All settings are controlled via environment variables in the `.env` file. Only `
        ▼
   ┌─────────────────────────────────┐
   │  1. Multi-query expansion       │  retriever.py
-  │     "data retention"             │  → "data retention"
+  │     "data retention"            │  → "data retention"
   │                                 │  → "data retention policy"
   │                                 │  → "company policy for data retention"
   │                                 │  → "guidelines for data retention"
@@ -371,10 +427,11 @@ All settings are controlled via environment variables in the `.env` file. Only `
 
 | Decision | Rationale |
 |---|---|
-| **SQLite as knowledge base** | Schema enforcement, transactional writes, and built-in queryability — no CSV-escaping issues. The `prepare_opp115.py` script populates it from the real-world OPP-115 dataset on Hugging Face, ensuring reproducible builds. `sqlite3` is a Python stdlib module, so no extra dependency is needed at runtime. |
+| **OPP-115 as data source** | A standard, research-grade NLP dataset of real company privacy policies from Hugging Face ([`alzoubi36/opp_115`](https://huggingface.co/datasets/alzoubi36/opp_115)). Provides 2,185 annotated segments across 12 privacy categories — far more representative than hand-written synthetic data. Chosen per internship coordinator guidance to use a real-world dataset. |
+| **SQLite as knowledge base** | Schema enforcement, transactional writes, and built-in queryability — no CSV-escaping issues. The `prepare_opp115.py` script populates it from Hugging Face, ensuring reproducible builds. `sqlite3` is a Python stdlib module, so no extra dependency is needed at runtime. |
 | **`sentence-transformers` for local embeddings** | Runs offline after initial model download. No API cost for embedding. `all-MiniLM-L6-v2` provides a good balance of quality and speed. |
-| **FAISS with scikit-learn fallback** | FAISS offers high-performance search but may not install cleanly on all platforms. The automatic fallback ensures the chatbot works everywhere. |
-| **Multi-query expansion** | Policy questions can be phrased in many ways. Expanding to multiple variants improves recall without requiring the user to guess the "right" wording. |
+| **FAISS with scikit-learn fallback** | FAISS offers high-performance vector search but may not install cleanly on all platforms. The automatic fallback ensures the chatbot works everywhere. |
+| **Multi-query expansion** | Privacy policy questions can be phrased in many ways. Expanding to multiple query variants improves recall without requiring the user to guess the "right" wording. |
 | **Embedding & index caching** | Avoids recomputing embeddings (~10–30 seconds) and the FAISS index on every launch. Cache lives in `Data/cache/` and is git-ignored. |
 | **Groq OpenAI-compatible API** | Groq provides fast inference. Using the OpenAI-compatible endpoint means switching to another provider is a one-line `.env` change. |
 | **Grounded generation prompt** | The system prompt explicitly constrains the LLM to answer only from provided context, reducing hallucination. |
@@ -410,9 +467,17 @@ python main.py
 
 ### Adding custom entries
 
-1. **Add rows** directly to the `policy_data` table in `Data/policy_data.db` using any SQLite client.
-2. **Delete the cache**: remove `Data/cache/` (or just the files inside it) so embeddings and the index are rebuilt.
-3. **Re-run**: `python main.py` — the chatbot will automatically reprocess and re-index all entries.
+You can add rows directly to the `policy_data` table in `Data/policy_data.db` using any SQLite client (e.g., [DB Browser for SQLite](https://sqlitebrowser.org/), the `sqlite3` CLI, or Python):
+
+```sql
+INSERT INTO policy_data (ID, Topic, Content)
+VALUES ('CUSTOM-001', 'Data Security', 'Full policy text here.');
+```
+
+After adding or modifying data:
+
+1. **Delete the cache**: remove `Data/cache/` so embeddings and the index are rebuilt.
+2. **Re-run**: `python main.py` — the chatbot will automatically reprocess and re-index all entries.
 
 ---
 
@@ -432,4 +497,4 @@ python main.py
 
 ## License
 
-This project is provided as-is for internal and educational use.
+This project is provided as-is for educational and research use.
