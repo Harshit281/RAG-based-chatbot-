@@ -23,10 +23,10 @@ Pure-function helpers for cleaning raw policy text before embedding and display.
 ```python
 from Utils.text_cleaning import normalize_text, extract_ref_code
 
-content = "Employees can work remotely.  [Ref Code: RW-001]"
-ref = extract_ref_code(content)        # "RW-001"
-text = normalize_text("Remote Work", content)
-# "Remote Work. Employees can work remotely. [Ref Code: RW-001]"
+content = "We will retain your information for as long as your account is active."
+ref = extract_ref_code(content)        # ""
+text = normalize_text("Data Retention", content)
+# "Data Retention. We will retain your information for as long as your account is active."
 ```
 
 **Dependencies:** `re` (standard library only)

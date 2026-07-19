@@ -69,17 +69,17 @@ Transforms each `PolicyData` row into a dictionary suitable for embedding and re
 
 | Function | Signature | Description |
 |---|---|---|
-| `create_chunks` | `(df: pd.DataFrame) → List[Dict]` | Iterates over rows and produces chunk dictionaries using `Utils.text_cleaning` for normalisation. |
+| `create_chunks` | `(df: PolicyData) → List[Dict]` | Iterates over rows and produces chunk dictionaries using `Utils.text_cleaning` for normalisation. |
 
 **Chunk dictionary schema:**
 
 ```python
 {
-    "id":       "1",                       # Row ID (string)
-    "topic":    "Remote Work Policy",      # Original topic
-    "content":  "Employees can work...",   # Original content text
-    "ref_code": "RW-001",                 # Extracted reference code (may be "")
-    "text":     "Remote Work Policy. ...", # Normalised text for embedding
+    "id":       "OPP-0001",                                    # Row ID (string)
+    "topic":    "Data Retention",                              # Privacy policy category
+    "content":  "We will retain your information for as...",   # Original content text
+    "ref_code": "",                                            # Extracted reference code (may be "")
+    "text":     "Data Retention. We will retain your...",      # Normalised text for embedding
 }
 ```
 
