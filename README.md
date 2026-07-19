@@ -4,8 +4,6 @@ A complete **Retrieval-Augmented Generation (RAG)** chatbot built in Python that
 
 The chatbot loads 2,185 annotated privacy policy segments, chunks and embeds them into a vector store, retrieves the most relevant passages for any user question, and generates a grounded natural-language answer using a Groq-hosted LLM — all from an interactive terminal interface.
 
-> **Why OPP-115?** This project was originally built with synthetic/hand-written HR policy data. Per our internship coordinator's guidance to use a standard, real-world dataset for production-readiness, we migrated to OPP-115 — a research-grade dataset of real company privacy policies annotated into 10+ standard categories (data collection, third-party sharing, user choice, data retention, security, etc.).
-
 ---
 
 ## Table of Contents
