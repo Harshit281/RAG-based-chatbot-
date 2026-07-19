@@ -1,0 +1,6 @@
+datasets
+sentence-transformers
+faiss-cpu
+scikit-learn
+python-dotenv
+requests

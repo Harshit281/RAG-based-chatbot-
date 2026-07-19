@@ -1,2 +1,29 @@
+# Environment variables (contains API keys)
+.env
+
+# Cached embeddings and vector index
+Data/cache/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Planning & walkthrough artifacts
 implementation_plan.md
 walkthrough.md
