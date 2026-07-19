@@ -1,35 +1,38 @@
-# RAG Policy Chatbot
+# Privacy Policy Q&A Assistant (RAG Chatbot)
 
-A complete **Retrieval-Augmented Generation (RAG)** chatbot built in Python that answers company policy questions. It loads a CSV knowledge base of policy documents, chunks and embeds them into a vector store, retrieves the most relevant passages for any user question, and generates a grounded natural-language answer using a Groq-hosted LLM — all from an interactive terminal interface.
+A complete **Retrieval-Augmented Generation (RAG)** chatbot built in Python that answers questions about how companies collect, use, share, retain, and secure personal data. It uses the **OPP-115** (Online Privacy Policies) dataset — a well-known NLP research dataset built from real, published privacy policies of actual companies — as its knowledge base, stored in a SQLite database.
+
+The chatbot loads 2,185 annotated privacy policy segments, chunks and embeds them into a vector store, retrieves the most relevant passages for any user question, and generates a grounded natural-language answer using a Groq-hosted LLM — all from an interactive terminal interface.
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [RAG Pipeline Steps](#rag-pipeline-steps)
-3. [Repository Structure](#repository-structure)
-4. [Directory Details](#directory-details)
-5. [Prerequisites](#prerequisites)
-6. [Installation & Setup](#installation--setup)
-7. [Running the Chatbot](#running-the-chatbot)
-8. [Configuration Reference](#configuration-reference)
-9. [Architecture & Data Flow](#architecture--data-flow)
-10. [Key Design Decisions](#key-design-decisions)
-11. [Extending the Knowledge Base](#extending-the-knowledge-base)
-12. [Troubleshooting](#troubleshooting)
-13. [License](#license)
+2. [Sample Questions](#sample-questions)
+3. [RAG Pipeline Steps](#rag-pipeline-steps)
+4. [Repository Structure](#repository-structure)
+5. [Directory Details](#directory-details)
+6. [Prerequisites](#prerequisites)
+7. [Installation & Setup](#installation--setup)
+8. [Running the Chatbot](#running-the-chatbot)
+9. [Configuration Reference](#configuration-reference)
+10. [Architecture & Data Flow](#architecture--data-flow)
+11. [Key Design Decisions](#key-design-decisions)
+12. [Extending the Knowledge Base](#extending-the-knowledge-base)
+13. [Troubleshooting](#troubleshooting)
+14. [License](#license)
 
 ---
 
 ## Overview
 
-This project demonstrates a **standard, end-to-end RAG implementation** using company policy documents as the knowledge base. It covers every core stage of the RAG pipeline:
+This project demonstrates a **standard, end-to-end RAG implementation** using the OPP-115 privacy policy dataset as the knowledge base. It covers every core stage of the RAG pipeline:
 
 | # | RAG Step | Module | Description |
 |---|---|---|---|
-| 1 | **Data Loading** | `Scripts/load_data.py` | Reads the policy CSV and validates the required schema (`ID`, `Topic`, `Content`). |
-| 2 | **Chunking** | `Scripts/chunk_data.py` | Converts each CSV row into a retrieval-ready chunk with normalised text, topic metadata, and extracted reference codes. |
+| 1 | **Data Loading** | `Scripts/load_data.py` | Reads the policy SQLite database and validates the required schema (`ID`, `Topic`, `Content`). |
+| 2 | **Chunking** | `Scripts/chunk_data.py` | Converts each database row into a retrieval-ready chunk with normalised text, topic metadata, and extracted reference codes. |
 | 3 | **Embedding** | `Scripts/embed_data.py` | Encodes chunk text into dense vector representations using a `sentence-transformers` model (`all-MiniLM-L6-v2` by default). |
 | 4 | **Vector Storage** | `Scripts/vector_store.py` | Stores embeddings in a FAISS `IndexFlatL2` index for fast similarity search (falls back to scikit-learn `NearestNeighbors` if FAISS is unavailable). |
 | 5 | **Retrieval** | `Scripts/retriever.py` | Embeds the user query (with optional multi-query expansion), searches the vector store, deduplicates and ranks results by average distance. |
@@ -39,28 +42,45 @@ The interactive REPL loop in `main.py` orchestrates these steps and presents res
 
 ---
 
+## Sample Questions
+
+Here are some example questions you can ask the chatbot, grouped by OPP-115 privacy topic:
+
+| Privacy Topic | Example Questions |
+|---|---|
+| **Data Retention** | "How long does the company retain my personal information?" · "Does the company store my data indefinitely?" |
+| **Data Security** | "What security measures are used to protect user data?" · "How is my personal information encrypted?" |
+| **Third Party Sharing** | "Does the company share my data with third-party advertisers?" · "What information is shared with third-party providers?" |
+| **User Choice & Control** | "Can I opt out of targeted advertising?" · "How do cookies and tracking technologies affect my privacy?" |
+| **User Access & Deletion** | "How can I request to delete my personal data?" · "What happens to my data if I cancel my account?" |
+| **Do Not Track** | "How does the company handle Do Not Track browser signals?" |
+| **Policy Changes** | "How will I be notified if the privacy policy changes?" |
+| **International Audiences** | "Is my data transferred or stored internationally?" · "What privacy protections exist for children under 13?" |
+
+---
+
 ## RAG Pipeline Steps
 
 Below is a detailed breakdown of how each RAG stage is implemented.
 
 ### Step 1 — Data Loading (`Scripts/load_data.py`)
 
-- Reads `Data/policy_data.csv` using Pandas.
-- Validates that the CSV contains the required columns: `ID`, `Topic`, `Content`.
-- Casts `Topic` and `Content` to strings and returns a clean DataFrame.
-- Raises `FileNotFoundError` if the CSV is missing, or `ValueError` if columns are absent.
+- Reads `Data/policy_data.db` (SQLite) using the `sqlite3` standard library.
+- Validates that the `policy_data` table exists and contains the required columns: `ID`, `Topic`, `Content`.
+- Returns a lightweight `PolicyData` object (supports `len()` and `iterrows()`) so the downstream pipeline works unchanged.
+- Raises `FileNotFoundError` if the database is missing, or `ValueError` if the table is absent or empty.
 
 ### Step 2 — Chunking (`Scripts/chunk_data.py`)
 
-- Iterates over each row in the DataFrame.
+- Iterates over each row from the `PolicyData` object.
 - For each row, creates a **chunk dictionary** with the following keys:
 
   | Key | Source | Purpose |
   |---|---|---|
   | `id` | `row['ID']` (as string) | Unique identifier |
-  | `topic` | `row['Topic']` | Human-readable policy title |
-  | `content` | `row['Content']` | Original policy text |
-  | `ref_code` | Extracted via regex from `Content` | Citation code (e.g. `RW-001`) |
+  | `topic` | `row['Topic']` | Privacy policy category |
+  | `content` | `row['Content']` | Original privacy policy text |
+  | `ref_code` | Extracted via regex from `Content` | Citation code (if present) |
   | `text` | Normalised `Topic + Content` | Clean text used for embedding |
 
 - Uses `Utils/text_cleaning.py` for whitespace normalisation and ref-code extraction.
@@ -100,7 +120,7 @@ Below is a detailed breakdown of how each RAG stage is implemented.
   > *"You are a policy assistant. Answer the user's question using only the context provided. If the answer is not contained in the context, say you are not able to answer from the available policy information."*
 - Sends the prompt to the Groq API via the OpenAI-compatible `/chat/completions` endpoint.
 - Parses the response using a robust extractor that handles multiple response envelope formats.
-- The final answer is displayed in the terminal with source ref-code citations.
+- The final answer is displayed in the terminal with source citations.
 
 ---
 
@@ -114,12 +134,13 @@ rag-policy-chatbot/
 ├── main.py                      # Application entry point — orchestrates the full RAG pipeline
 ├── requirements.txt             # Python package dependencies
 ├── .env                         # API keys and runtime configuration (git-ignored)
+├── .env.example                 # Template for .env with default values
 ├── .gitignore                   # Excludes .env, cache/, __pycache__/, *.pyc
 ├── README.md                    # This file — repository-level documentation
 │
 ├── Data/                        # Knowledge base and cached artifacts
 │   ├── README.md                # Documentation for the Data directory
-│   ├── policy_data.csv          # Source policy documents (206 entries)
+│   ├── policy_data.db           # OPP-115 privacy policy database (2,185 entries)
 │   └── cache/                   # Auto-generated on first run (git-ignored)
 │       ├── embeddings.npy       #   Cached sentence-transformer embeddings
 │       └── faiss.index          #   Cached FAISS vector index
@@ -127,7 +148,8 @@ rag-policy-chatbot/
 ├── Scripts/                     # Core RAG pipeline modules (Python only)
 │   ├── README.md                # Documentation for the Scripts directory
 │   ├── __init__.py              # Package initialiser
-│   ├── load_data.py             # Step 1: Data loading & CSV validation
+│   ├── prepare_opp115.py        # Data preparation: fetches OPP-115 from Hugging Face → policy_data.db
+│   ├── load_data.py             # Step 1: Data loading & SQLite validation
 │   ├── chunk_data.py            # Step 2: Row-to-chunk conversion
 │   ├── embed_data.py            # Step 3: Embedding model & text encoding
 │   ├── vector_store.py          # Step 4: FAISS / scikit-learn vector index
@@ -149,20 +171,21 @@ rag-policy-chatbot/
 
 ### `Data/` — Knowledge Base
 
-Contains the source policy documents and auto-generated cache files. See [`Data/README.md`](Data/README.md) for full details.
+Contains the OPP-115 privacy policy database and auto-generated cache files. See [`Data/README.md`](Data/README.md) for full details.
 
 | File | Description |
 |---|---|
-| `policy_data.csv` | The primary knowledge base — 206 rows with `ID`, `Topic`, and `Content` columns. Topics include remote work, health insurance, IT security, expense reimbursement, and more. |
+| `policy_data.db` | The primary knowledge base — **2,185 OPP-115 privacy policy segments** stored in a SQLite database with `ID`, `Topic`, and `Content` columns. Topics span 12 privacy categories (First Party Collection, User Choice/Control, Data Security, Data Retention, Third Party Sharing, Do Not Track, and more). Sourced from [`alzoubi36/opp_115`](https://huggingface.co/datasets/alzoubi36/opp_115) on Hugging Face. |
 | `cache/` | Auto-created directory storing `embeddings.npy` and `faiss.index` after the first run. Listed in `.gitignore`. Delete to force a full rebuild. |
 
 ### `Scripts/` — RAG Pipeline Modules
 
-Contains one Python module per RAG pipeline stage. See [`Scripts/README.md`](Scripts/README.md) for function signatures and detailed API docs.
+Contains one Python module per RAG pipeline stage plus the data preparation script. See [`Scripts/README.md`](Scripts/README.md) for function signatures and detailed API docs.
 
 | Module | RAG Step | Key Functions |
 |---|---|---|
-| `load_data.py` | Data Loading | `load_csv(filepath) → DataFrame` |
+| `prepare_opp115.py` | Data Preparation | Fetches OPP-115 from Hugging Face → `policy_data.db` |
+| `load_data.py` | Data Loading | `load_db(filepath) → PolicyData` |
 | `chunk_data.py` | Chunking | `create_chunks(df) → List[Dict]` |
 | `embed_data.py` | Embedding | `load_embedding_model(name)`, `generate_embeddings(model, texts)` |
 | `vector_store.py` | Vector Storage | `VectorStore(embeddings)`, `.search()`, `save_index()`, `load_index()` |
@@ -195,8 +218,8 @@ Contains formatting and text-cleaning helpers used across the pipeline. See [`Ut
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd rag-policy-chatbot
+git clone https://github.com/Harshit281/RAG-based-chatbot-.git
+cd RAG-based-chatbot-
 ```
 
 ### 2. Create a Virtual Environment (recommended)
@@ -224,7 +247,7 @@ This installs:
 
 | Package | Purpose |
 |---|---|
-| `pandas` | CSV loading and DataFrame operations |
+| `datasets` | Fetching the OPP-115 dataset from Hugging Face (used by `prepare_opp115.py`) |
 | `sentence-transformers` | Local embedding model for semantic search |
 | `faiss-cpu` | Fast approximate nearest-neighbour vector index |
 | `scikit-learn` | Fallback nearest-neighbour search (if FAISS is unavailable) |
@@ -233,7 +256,13 @@ This installs:
 
 ### 4. Configure the `.env` File
 
-Edit the `.env` file in the project root and set your Groq API key:
+Copy the template and fill in your Groq API key:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
 
 ```dotenv
 # Required
@@ -250,6 +279,15 @@ TOP_K=5
 GENERATION_TOP_K=3
 ```
 
+### 5. Prepare the Database (if not already present)
+
+The repository ships with a pre-built `Data/policy_data.db`. To rebuild it from scratch:
+
+```bash
+pip install datasets          # one-time install
+python Scripts/prepare_opp115.py
+```
+
 ---
 
 ## Running the Chatbot
@@ -260,14 +298,31 @@ python main.py
 
 **First-run sequence:**
 
-1. Loads and validates `Data/policy_data.csv` (206 policy entries).
-2. Creates chunks from each CSV row.
+1. Loads and validates `Data/policy_data.db` (2,185 OPP-115 privacy policy segments).
+2. Creates chunks from each database row.
 3. Generates embeddings using `sentence-transformers` (saved to `Data/cache/embeddings.npy`).
 4. Builds a FAISS vector index (saved to `Data/cache/faiss.index`).
 5. Loads the embedding model for query-time encoding.
-6. Enters the interactive REPL — type a policy question and press Enter.
+6. Enters the interactive REPL — type a privacy policy question and press Enter.
 
 **Subsequent runs** load cached embeddings and the index from disk, making startup near-instant.
+
+**Example session:**
+
+```
+? Ask a policy question: How long does the company retain my data?
+
+──────────────── 📖 RETRIEVED SNIPPETS ────────────────
+  1. Data Retention
+     Data retention policy We will retain your information for
+     as long as your account is active or as needed to provide
+     you with services...
+
+══════════════════ 🤖 ANSWER ══════════════════════════
+  The company keeps your data for as long as your account
+  remains active or as long as it's needed to provide you
+  with its services...
+```
 
 **To exit:** Type `quit` or `exit` at the prompt.
 
@@ -305,7 +360,7 @@ All settings are controlled via environment variables in the `.env` file. Only `
   │   Data/       │                      │   Scripts/      │                      │   Utils/        │
   │               │                      │                 │                      │                 │
   │ policy_data   │◄────── loaded by ────│ load_data.py    │                      │ text_cleaning   │
-  │   .csv        │                      │                 │                      │   .py           │
+  │   .db         │                      │                 │                      │   .py           │
   │               │                      │ chunk_data.py ──┼── uses ─────────────►│                 │
   │ cache/        │◄── saved/loaded ─────│ embed_data.py   │                      │ formatting.py   │
   │  embeddings   │                      │ vector_store.py │                      │   (terminal UI) │
@@ -322,10 +377,10 @@ All settings are controlled via environment variables in the `.env` file. Only `
        ▼
   ┌─────────────────────────────────┐
   │  1. Multi-query expansion       │  retriever.py
-  │     "leave policy"              │  → "leave policy"
-  │                                 │  → "leave policy policy"
-  │                                 │  → "company policy for leave policy"
-  │                                 │  → "guidelines for leave policy"
+  │     "data retention"            │  → "data retention"
+  │                                 │  → "data retention policy"
+  │                                 │  → "company policy for data retention"
+  │                                 │  → "guidelines for data retention"
   └──────────────┬──────────────────┘
                  │
                  ▼
@@ -370,10 +425,11 @@ All settings are controlled via environment variables in the `.env` file. Only `
 
 | Decision | Rationale |
 |---|---|
-| **CSV as knowledge base** | Simple, human-editable format suitable for small-to-medium policy document sets. Easy to version in Git. |
+| **OPP-115 as data source** | A standard, research-grade NLP dataset of real company privacy policies from Hugging Face ([`alzoubi36/opp_115`](https://huggingface.co/datasets/alzoubi36/opp_115)). Provides 2,185 annotated segments across 12 privacy categories — far more representative than hand-written synthetic data. Chosen per internship coordinator guidance to use a real-world dataset. |
+| **SQLite as knowledge base** | Schema enforcement, transactional writes, and built-in queryability — no CSV-escaping issues. The `prepare_opp115.py` script populates it from Hugging Face, ensuring reproducible builds. `sqlite3` is a Python stdlib module, so no extra dependency is needed at runtime. |
 | **`sentence-transformers` for local embeddings** | Runs offline after initial model download. No API cost for embedding. `all-MiniLM-L6-v2` provides a good balance of quality and speed. |
-| **FAISS with scikit-learn fallback** | FAISS offers high-performance search but may not install cleanly on all platforms. The automatic fallback ensures the chatbot works everywhere. |
-| **Multi-query expansion** | Policy questions can be phrased in many ways. Expanding to multiple variants improves recall without requiring the user to guess the "right" wording. |
+| **FAISS with scikit-learn fallback** | FAISS offers high-performance vector search but may not install cleanly on all platforms. The automatic fallback ensures the chatbot works everywhere. |
+| **Multi-query expansion** | Privacy policy questions can be phrased in many ways. Expanding to multiple query variants improves recall without requiring the user to guess the "right" wording. |
 | **Embedding & index caching** | Avoids recomputing embeddings (~10–30 seconds) and the FAISS index on every launch. Cache lives in `Data/cache/` and is git-ignored. |
 | **Groq OpenAI-compatible API** | Groq provides fast inference. Using the OpenAI-compatible endpoint means switching to another provider is a one-line `.env` change. |
 | **Grounded generation prompt** | The system prompt explicitly constrains the LLM to answer only from provided context, reducing hallucination. |
@@ -384,9 +440,42 @@ All settings are controlled via environment variables in the `.env` file. Only `
 
 ## Extending the Knowledge Base
 
-1. **Add rows** to `Data/policy_data.csv` following the existing `ID,Topic,Content` format.
-2. **Delete the cache**: remove `Data/cache/` (or just the files inside it) so embeddings and the index are rebuilt.
-3. **Re-run**: `python main.py` — the chatbot will automatically reprocess and re-index all entries.
+### Refreshing from OPP-115
+
+Re-run the data preparation script to fetch the latest dataset and rebuild the database:
+
+```bash
+pip install datasets          # one-time install
+python Scripts/prepare_opp115.py
+```
+
+Then delete the cache and restart:
+
+```bash
+# Mac/Linux
+rm -rf Data/cache
+
+# Windows
+rmdir /s /q Data\cache
+```
+
+```bash
+python main.py
+```
+
+### Adding custom entries
+
+You can add rows directly to the `policy_data` table in `Data/policy_data.db` using any SQLite client (e.g., [DB Browser for SQLite](https://sqlitebrowser.org/), the `sqlite3` CLI, or Python):
+
+```sql
+INSERT INTO policy_data (ID, Topic, Content)
+VALUES ('CUSTOM-001', 'Data Security', 'Full policy text here.');
+```
+
+After adding or modifying data:
+
+1. **Delete the cache**: remove `Data/cache/` so embeddings and the index are rebuilt.
+2. **Re-run**: `python main.py` — the chatbot will automatically reprocess and re-index all entries.
 
 ---
 
@@ -398,11 +487,12 @@ All settings are controlled via environment variables in the `.env` file. Only `
 | `faiss-cpu` fails to install | The chatbot will automatically fall back to scikit-learn. You can safely remove `faiss-cpu` from `requirements.txt` if needed. |
 | Unicode / box-drawing characters display as `?` | Your terminal may not support UTF-8. The chatbot auto-detects this and falls back to ASCII characters. Set `chcp 65001` on Windows CMD for UTF-8 support. |
 | `ModuleNotFoundError: No module named 'Scripts'` | Make sure you are running `python main.py` from the project root directory (`rag-policy-chatbot/`). |
-| Slow first launch | On the first run, embeddings are generated for all 206 policy entries (~10–30 seconds depending on hardware). Subsequent runs load from cache and start in under 2 seconds. |
-| Stale answers after updating the CSV | Delete `Data/cache/` and restart to force re-embedding and re-indexing. |
+| `policy_data.db` is missing or empty | Run `python Scripts/prepare_opp115.py` to fetch the OPP-115 dataset and create the database. |
+| Slow first launch | On the first run, embeddings are generated for all 2,185 policy segments (~30–90 seconds depending on hardware). Subsequent runs load from cache and start in under 2 seconds. |
+| Stale answers after updating the database | Delete `Data/cache/` and restart to force re-embedding and re-indexing. |
 
 ---
 
 ## License
 
-This project is provided as-is for internal and educational use.
+This project is provided as-is for educational and research use.

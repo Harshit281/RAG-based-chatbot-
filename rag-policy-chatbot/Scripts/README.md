@@ -23,39 +23,63 @@ This directory contains the **core pipeline modules** that implement all six sta
 
 ## Module Reference
 
-### 1. `load_data.py` — Data Loading & CSV Validation
+### 0. `prepare_opp115.py` — OPP-115 Data Preparation
 
-Reads the policy CSV file and ensures it has the required schema.
+Fetches the OPP-115 privacy policy dataset from Hugging Face and populates the SQLite database.
 
-**Functions:**
+**Usage:**
 
-| Function | Signature | Description |
+```bash
+pip install datasets          # one-time install
+python Scripts/prepare_opp115.py
+```
+
+**What it does:**
+
+1. Drops and recreates the `policy_data` table in `Data/policy_data.db`.
+2. Loads the `alzoubi36/opp_115` dataset (train split) from Hugging Face.
+3. Maps integer labels to human-readable privacy category names.
+4. Inserts all rows in a single atomic transaction with duplicate-ID handling.
+5. Verifies the final table and prints a topic distribution summary.
+
+**Dependencies:** `datasets` (Hugging Face), `sqlite3`, `os`, `re`
+
+---
+
+### 1. `load_data.py` — Data Loading & Validation
+
+Reads the policy data from the SQLite database and returns a lightweight `PolicyData` object.
+
+**Classes & Functions:**
+
+| Name | Type | Description |
 |---|---|---|
-| `load_csv` | `(filepath: str) → pd.DataFrame` | Loads the CSV, validates that `ID`, `Topic`, and `Content` columns exist, casts types, and returns a cleaned DataFrame. Raises `FileNotFoundError` if the file is missing or `ValueError` if columns are absent. |
+| `PolicyData(rows)` | Class | Lightweight wrapper around a list of row dicts. Supports `len()` and `iterrows()` (yields `(index, row_dict)` pairs), matching the API surface that `chunk_data.py` expects. |
+| `load_db` | `(filepath: str) -> PolicyData` | Loads the `policy_data` table from a SQLite database. Validates that the table exists, is non-empty, and has the expected columns. Raises `FileNotFoundError` if the file is missing or `ValueError` if the table is absent or empty. |
 
-**Dependencies:** `pandas`
+**Dependencies:** `sqlite3`, `os` (stdlib only)
 
 ---
 
 ### 2. `chunk_data.py` — Row → Chunk Conversion
 
-Transforms each DataFrame row into a dictionary suitable for embedding and retrieval.
+Transforms each `PolicyData` row into a dictionary suitable for embedding and retrieval.
 
 **Functions:**
 
 | Function | Signature | Description |
 |---|---|---|
-| `create_chunks` | `(df: pd.DataFrame) → List[Dict]` | Iterates over rows and produces chunk dictionaries using `Utils.text_cleaning` for normalisation. |
+| `create_chunks` | `(df: PolicyData) → List[Dict]` | Iterates over rows and produces chunk dictionaries using `Utils.text_cleaning` for normalisation. |
 
 **Chunk dictionary schema:**
 
 ```python
 {
-    "id":       "1",                       # Row ID (string)
-    "topic":    "Remote Work Policy",      # Original topic
-    "content":  "Employees can work...",   # Original content text
-    "ref_code": "RW-001",                 # Extracted reference code (may be "")
-    "text":     "Remote Work Policy. ...", # Normalised text for embedding
+    "id":       "OPP-0001",                                    # Row ID (string)
+    "topic":    "Data Retention",                              # Privacy policy category
+    "content":  "We will retain your information for as...",   # Original content text
+    "ref_code": "",                                            # Extracted reference code (may be "")
+    "text":     "Data Retention. We will retain your...",      # Normalised text for embedding
 }
 ```
 
@@ -107,12 +131,12 @@ Expands the user query into multiple variants, searches the vector store for eac
 
 **Multi-query variants generated (when `multi_query=True`):**
 
-| # | Variant Template | Example (query = `"leave policy"`) |
+| # | Variant Template | Example (query = `"data retention"`) |
 |---|---|---|
-| 1 | `<query>` | `leave policy` |
-| 2 | `<query> policy` | `leave policy policy` |
-| 3 | `company policy for <query>` | `company policy for leave policy` |
-| 4 | `guidelines for <query>` | `guidelines for leave policy` |
+| 1 | `<query>` | `data retention` |
+| 2 | `<query> policy` | `data retention policy` |
+| 3 | `company policy for <query>` | `company policy for data retention` |
+| 4 | `guidelines for <query>` | `guidelines for data retention` |
 
 **Ranking algorithm:**
 1. Results from all variants are merged; duplicate chunk indices are combined.
